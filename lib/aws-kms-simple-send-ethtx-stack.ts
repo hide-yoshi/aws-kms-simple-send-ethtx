@@ -3,6 +3,13 @@ import { LambdaIntegration, RestApi } from "aws-cdk-lib/aws-apigateway";
 import { NodejsFunction } from "aws-cdk-lib/aws-lambda-nodejs";
 import { Construct } from "constructs";
 import { resourceId } from "./constants";
+import {
+  ManagedPolicy,
+  PolicyDocument,
+  PolicyStatement,
+  Role,
+  ServicePrincipal,
+} from "aws-cdk-lib/aws-iam";
 
 export class AwsKmsSimpleSendEthtxStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -12,6 +19,7 @@ export class AwsKmsSimpleSendEthtxStack extends cdk.Stack {
       functionName: resourceId("mintFunc"),
       entry: "lib/lambda/api/index.ts",
       handler: "handler",
+      role: lambdaRole(this),
       timeout: cdk.Duration.minutes(15),
     });
 
@@ -25,6 +33,27 @@ export class AwsKmsSimpleSendEthtxStack extends cdk.Stack {
     );
   }
 }
+
+const lambdaRole = (scope: cdk.Stack) => {
+  return new Role(scope, resourceId("lambdaRole"), {
+    assumedBy: new ServicePrincipal("lambda.amazonaws.com"),
+    managedPolicies: [
+      ManagedPolicy.fromAwsManagedPolicyName(
+        "service-role/AWSLambdaBasicExecutionRole"
+      ),
+    ],
+    inlinePolicies: {
+      kmsDecrypt: new PolicyDocument({
+        statements: [
+          new PolicyStatement({
+            actions: ["kms:GetPublicKey", "kms:Sign"],
+            resources: ["*"], // TODO: restrict to key arn
+          }),
+        ],
+      }),
+    },
+  });
+};
 
 const restApi = (scope: cdk.Stack) => {
   const apiGateway = new RestApi(scope, resourceId("api"), {
